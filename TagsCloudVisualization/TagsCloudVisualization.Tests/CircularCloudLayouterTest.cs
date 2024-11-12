@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
-using TagsCloudVisualization;
+using NUnit.Framework.Interfaces;
 
 namespace TagsCloudVisualization.Tests;
 
@@ -13,13 +15,91 @@ namespace TagsCloudVisualization.Tests;
 public class CircularCloudLayouterTest
 {
 
+    private static readonly string failReportFolderPath = "./failed";
+
+    [OneTimeSetUp]
+    public void EmptyFailReportFolder()
+    {
+        if (Directory.Exists(failReportFolderPath))
+            Directory.Delete(failReportFolderPath, true);
+    }
+
+    [TearDown]
+    public void ReportFailures()
+    {
+        var context = TestContext.CurrentContext;
+        if (context.Result.Outcome.Status == TestStatus.Failed)
+        {
+            var args = context.Test.Arguments;
+            var center = new Point((int) args[0]!, (int) args[1]!);
+            var circularCloudLayouter = Arrange(center.X, center.Y);
+            if (context.Test.MethodName == null)
+            {
+                Console.WriteLine("Teardown error: test method name is null");
+                return;
+            }
+
+            if (context.Test.MethodName.Contains(nameof(PutNextRectangle_ThrowsOnHeightOrWidth_BeingLessOrEqualToZero)))
+                return;
+            
+            var isClosenessTest = context.Test.MethodName.Contains(nameof(RectanglesShouldBeCloseToEachOther));
+
+            var sizesArr = ((int, int)[])(isClosenessTest ? args[3] : args[2]);
+            
+            var rectangles = GenerateLayout(sizesArr, circularCloudLayouter);
+            var savingPath = $"{failReportFolderPath}/{context.Test.Name}.png";
+            
+            Directory.CreateDirectory(failReportFolderPath);
+            
+#pragma warning disable CA1416
+            var pen = new Pen(Color.Blue);
+            var bitmap = new Bitmap(1000, 1000);
+            var graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.White);
+            graphics.DrawRectangles(pen, rectangles.ToArray());
+            
+            var isCenterTest = context.Test.MethodName.Contains(nameof(RectanglesCommonBarycenterIsCloseToTheProvidedCenter));
+            if (isCenterTest)
+                graphics.DrawEllipse(pen, center.X, center.Y, 20, 20);
+            
+            bitmap.Save(savingPath, ImageFormat.Png);
+#pragma warning restore CA1416
+            Console.WriteLine($"Failure was reported to {Path.GetFullPath(savingPath)}");
+        }
+    }
+
+    [Test]
+    [Description("Проверяем, что метод PutNextRectangle бросает ArgumentException, " +
+                 "если ему передан размер прямоугольника с высотой или шириной " +
+                 "меньше либо равной нулю")]
+    [TestCase(0, -4, 0, 4)]
+    [TestCase(0, 1, -2, 4)]
+    [TestCase(0, 0, 4, -2)]
+    [TestCase(2, 3, 2, 0)]
+    [TestCase(1, 2, -2, -1)]
+    [TestCase(-1, 0, -1, 0)]
+    public void PutNextRectangle_ThrowsOnHeightOrWidth_BeingLessOrEqualToZero(
+        int centerX,
+        int centerY,
+        int width,
+        int height)
+    {
+        var circularCloudLayouter = Arrange(centerX, centerY);
+
+        Action act = () => circularCloudLayouter.PutNextRectangle(new Size(width, height));
+
+        act.Should()
+            .Throw<ArgumentException>()
+            .WithMessage("rectangle width and height must be greater than 0");
+    }
+
     [Test]
     [Description("Проверяем, что прямоугольники не пересекаются друг с другом")]
     [TestCaseSource(nameof(IntersectionTestSource))]
     public void RectanglesShouldNotIntersectEachOther(
         int centerX,
         int centerY,
-        params (int, int)[] sizes)
+        (int, int)[] sizes)
     {
         var circularCloudLayouter = Arrange(centerX, centerY);
 
@@ -35,7 +115,7 @@ public class CircularCloudLayouterTest
     public void FirstRectangleShouldBePositionedAtProvidedCenter(
         int centerX,
         int centerY,
-        params (int, int)[] sizes)
+        (int, int)[] sizes)
     {
         var circularCloudLayouter = Arrange(centerX, centerY);
 
@@ -53,7 +133,7 @@ public class CircularCloudLayouterTest
         int centerX,
         int centerY,
         int maxDistance,
-        params (int, int)[] sizes)
+        (int, int)[] sizes)
     {
         var circularCloudLayouter = Arrange(centerX, centerY);
 
@@ -69,7 +149,7 @@ public class CircularCloudLayouterTest
     public void RectanglesCommonBarycenterIsCloseToTheProvidedCenter(
         int centerX,
         int centerY,
-        params (int, int)[] sizes)
+        (int, int)[] sizes)
     {
         var circularCloudLayouter = Arrange(centerX, centerY);
 
@@ -121,7 +201,9 @@ public class CircularCloudLayouterTest
     {
         var rectangleList = rectangles.ToList();
         return rectangleList
-            .SelectMany(rect1 => rectangleList.Select(rect2 => new RectanglePair(rect1, rect2)))
+            .SelectMany((rect1, index) => rectangleList
+                .GetRange(index, rectangleList.Count - index)
+                .Select(rect2 => new RectanglePair(rect1, rect2)))
             .Where(pair => pair.Rectangle1 != pair.Rectangle2);
     }
 
@@ -160,7 +242,7 @@ public class CircularCloudLayouterTest
             });
         var barycenter = new Point(totalX / count, totalY / count);
         var deviationFromCenter = SquaredDistance(barycenter, center);
-        deviationFromCenter.Should().BeLessOrEqualTo(100);
+        deviationFromCenter.Should().BeLessOrEqualTo(25);
     }
 
     private static object[][] IntersectionTestSource()
@@ -168,27 +250,36 @@ public class CircularCloudLayouterTest
         return
         [
             [
-                0, 0,
-                (1, 2),
-                (3, 4),
-                (5, 6),
-                (7, 8)
+                500, 500,
+                new[]
+                {
+                    (20, 10),
+                    (40, 20),
+                    (60, 30),
+                    (80, 40)
+                }
             ],
             [
-                0, 0,
-                (1, 1),
-                (1, 1),
-                (2, 2),
-                (2, 2)
+                500, 500,
+                new[]
+                {
+                    (10, 10),
+                    (10, 10),
+                    (20, 10),
+                    (20, 10)
+                }
             ],
             [
-                3, 3,
-                (1, 2),
-                (2, 1),
-                (4, 5),
-                (6, 5),
-                (3, 2),
-                (2, 2)
+                600, 600,
+                new[]
+                {
+                    (20, 10),
+                    (30, 15),
+                    (50, 10),
+                    (60, 30),
+                    (30, 10),
+                    (40, 20)
+                }
             ]
         ];
     }
@@ -198,20 +289,29 @@ public class CircularCloudLayouterTest
         return
         [
             [
-                0, 0,
-                (1, 2),
-                (2, 3),
-                (4, 5)
+                500, 500,
+                new[]
+                {
+                    (20, 30),
+                    (30, 45),
+                    (40, 60)
+                }
             ],
             [
-                1, 5,
-                (4, 4),
-                (3, 3),
-                (2, 2)
+                510, 550,
+                new[]
+                {
+                    (10, 40),
+                    (10, 30),
+                    (10, 20)
+                }
             ],
             [
-                -2, 3,
-                (3, 3)
+                300, 800,
+                new[]
+                {
+                    (10, 30)
+                }
             ]
         ];
     }
@@ -221,30 +321,42 @@ public class CircularCloudLayouterTest
         return
         [
             [
-                0, 0, 25,
-                (2, 2),
-                (3, 3),
-                (4, 4)
+                500, 500, 3025,
+                new[]
+                {
+                    (20, 20),
+                    (30, 30),
+                    (40, 40)
+                }
             ],
             [
-                0, 0, 25,
-                (2, 2),
-                (4, 4),
-                (3, 3)
+                500, 500, 3025,
+                new[]
+                {
+                    (20, 20),
+                    (40, 40),
+                    (30, 30)
+                }
             ],
             [
-                0, 0, 36,
-                (4, 4),
-                (3, 3),
-                (2, 2),
-                (1, 1)
+                600, 400, 4225,
+                new[]
+                {
+                    (40, 40),
+                    (30, 30),
+                    (20, 20),
+                    (10, 10)
+                }
             ],
             [
-                0, 0, 25,
-                (2, 2),
-                (3, 3),
-                (4, 4),
-                (1, 1)
+                400, 550, 3025,
+                new[]
+                {
+                    (20, 20),
+                    (30, 30),
+                    (40, 40),
+                    (10, 10)
+                }
             ]
         ];
     }
@@ -254,29 +366,38 @@ public class CircularCloudLayouterTest
         return
         [
             [
-                0, 0,
-                (2, 2),
-                (4, 3),
-                (3, 4),
-                (2 ,2)
+                500, 500,
+                new[]
+                {
+                    (10, 20),
+                    (10, 60),
+                    (10, 60),
+                    (10, 20)
+                }
             ],
             [
-                3, 5,
-                (4, 1),
-                (1, 5),
-                (3, 2),
-                (4, 3)
+                300, 500,
+                new[]
+                {
+                    (10, 40),
+                    (10, 50),
+                    (20, 30),
+                    (40, 30)
+                }
             ],
             [
-                2, 10,
-                (1, 2),
-                (2, 3),
-                (3, 4),
-                (4, 5),
-                (5, 4),
-                (4, 3),
-                (3, 2),
-                (2, 1)
+                520, 410,
+                new[]
+                {
+                    (10, 20),
+                    (20, 30),
+                    (30, 40),
+                    (40, 50),
+                    (50, 40),
+                    (40, 30),
+                    (30, 20),
+                    (20, 10)
+                }
             ]
         ];
     }
