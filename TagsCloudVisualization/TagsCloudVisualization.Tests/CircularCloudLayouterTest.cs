@@ -16,6 +16,7 @@ public class CircularCloudLayouterTest
 {
 
     private static readonly string failReportFolderPath = "./failed";
+    private static readonly int maxDistanceFromBarycenter = 20;
 
     [OneTimeSetUp]
     public void EmptyFailReportFolder()
@@ -46,21 +47,26 @@ public class CircularCloudLayouterTest
 
             var sizesArr = ((int, int)[])(isClosenessTest ? args[3] : args[2]);
             
-            var rectangles = GenerateLayout(sizesArr, circularCloudLayouter);
+            var rectangles = GenerateLayout(sizesArr, circularCloudLayouter).ToArray();
             var savingPath = $"{failReportFolderPath}/{context.Test.Name}.png";
             
             Directory.CreateDirectory(failReportFolderPath);
             
 #pragma warning disable CA1416
-            var pen = new Pen(Color.Blue);
             var bitmap = new Bitmap(1000, 1000);
             var graphics = Graphics.FromImage(bitmap);
             graphics.Clear(Color.White);
-            graphics.DrawRectangles(pen, rectangles.ToArray());
+            graphics.DrawRectangles(new Pen(Color.Blue), rectangles);
             
             var isCenterTest = context.Test.MethodName.Contains(nameof(RectanglesCommonBarycenterIsCloseToTheProvidedCenter));
             if (isCenterTest)
-                graphics.DrawEllipse(pen, center.X, center.Y, 20, 20);
+            {
+                graphics.DrawEllipse(
+                    new Pen(Color.Lime), center.X, center.Y,
+                    maxDistanceFromBarycenter, maxDistanceFromBarycenter);
+                var barycenter = ComputeBaryCenter(rectangles);
+                graphics.DrawEllipse(new Pen(Color.Red), barycenter.X, barycenter.Y, 1, 1);
+            }
             
             bitmap.Save(savingPath, ImageFormat.Png);
 #pragma warning restore CA1416
@@ -230,9 +236,7 @@ public class CircularCloudLayouterTest
             .OnlyContain(pair => pair.DistanceIsNotGreaterThan(maxDistance));
     }
 
-    private void Assert_RectanglesBarycenterIsCloseToCenter(
-        IEnumerable<Rectangle> rectangles,
-        Point center)
+    private Point ComputeBaryCenter(IEnumerable<Rectangle> rectangles)
     {
         var (totalX, totalY, count) = rectangles
             .Aggregate((0, 0, 0), ((int totalX, int totalY, int count) res, Rectangle rect) =>
@@ -240,9 +244,16 @@ public class CircularCloudLayouterTest
                 var rectCenter = RectangleCenter(rect);
                 return (res.totalX + rectCenter.X, res.totalY + rectCenter.Y, ++res.count);
             });
-        var barycenter = new Point(totalX / count, totalY / count);
+        return new Point(totalX / count, totalY / count);
+    }
+
+    private void Assert_RectanglesBarycenterIsCloseToCenter(
+        IEnumerable<Rectangle> rectangles,
+        Point center)
+    {
+        var barycenter = ComputeBaryCenter(rectangles);
         var deviationFromCenter = SquaredDistance(barycenter, center);
-        deviationFromCenter.Should().BeLessOrEqualTo(25);
+        deviationFromCenter.Should().BeLessOrEqualTo(maxDistanceFromBarycenter * maxDistanceFromBarycenter);
     }
 
     private static object[][] IntersectionTestSource()

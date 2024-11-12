@@ -8,8 +8,9 @@ public class CircularCloudLayouter
     private Point cloudCenter;
     private double nextAngle;
 
-    private static readonly double angleStep = Math.PI / 8;
-    private static readonly double tracingStep = 1;
+    private static readonly double angleStep = Math.PI / 2;
+    private static readonly float tracingStep = 0.01f;
+    private static readonly float maxTracingDistance = 500f;
     
     public CircularCloudLayouter(Point center)
     {
@@ -32,31 +33,26 @@ public class CircularCloudLayouter
             return rectangle;
         }
 
-        Rectangle? result = null;
-        while (!result.HasValue)
-        {
-            var nextPos = GetNextPosition();
-            var (hitRect, hitPoint) = TraceLineToCenter(nextPos);
-            result = TryPlaceRectangleNearHitPoint(rectangleSize, hitRect, hitPoint);
-        }
-        
-        generatedLayout.Add(result.Value);
-        return result.Value;
+        var nextRectangle = GetNextRectangle(rectangleSize);
+        generatedLayout.Add(nextRectangle);
+        return nextRectangle;
     }
 
-    private Rectangle? TryPlaceRectangleNearHitPoint(Size rectangleSize, Rectangle hitRectangle, PointF hitPoint)
+    private Rectangle GetNextRectangle(Size rectangleSize)
     {
-        var differences = new PointF[]
+        Rectangle? result = null;
+        while (result == null)
         {
-            new PointF(hitRectangle.X - hitPoint.X, hitRectangle.Y - hitPoint.Y),
-            new PointF(hitRectangle.Right - hitPoint.X, hitRectangle.Y - hitPoint.Y),
-            new PointF(hitRectangle.X - hitPoint.X, hitRectangle.Bottom - hitPoint.Y),
-            new PointF(hitRectangle.Right - hitPoint.X, hitRectangle.Bottom - hitPoint.Y),
-        };
-        var min = differences.MinBy(point => Math.Pow(point.X, 2) + Math.Pow(point.Y, 2));
-        var posToPlace = Point.Truncate(new PointF(hitPoint.X + min.X, hitPoint.Y + min.Y));
+            var direction = GetNextDirection();
+            var step = 0.0f;
+            while (step < 1f && result == null)
+            {
+                (step, var availablePos) = FindNextAvailablePosByTracingLine(direction, step);
+                result = TryFindGoodRectanglePosition(availablePos, rectangleSize);
+            }
+        }
 
-        return TryFindGoodRectanglePosition(posToPlace, rectangleSize);
+        return result.Value;
     }
 
     private Rectangle? TryFindGoodRectanglePosition(Point posToPlace, Size rectangleSize)
@@ -93,37 +89,30 @@ public class CircularCloudLayouter
         return best;
     }
 
-    private (Rectangle, PointF) TraceLineToCenter(PointF from)
+    private (float, Point) FindNextAvailablePosByTracingLine(PointF direction, float startingStep = 0.0f)
     {
-        var difference = new PointF(cloudCenter.X - from.X, cloudCenter.Y - from.Y);
-        var currentStep = 0.1d;
-        while (currentStep < 1.0d)
+        var nextPos = new PointF(
+            cloudCenter.X + direction.X * tracingStep,
+            cloudCenter.Y + direction.Y * tracingStep);
+        var currentStep = startingStep == 0.0f ? tracingStep : startingStep;
+        var notInRectangle = false;
+        while (!notInRectangle)
         {
-            var tracingPos = new PointF(
-                (float)(from.X + difference.X * currentStep),
-                (float)(from.Y + difference.Y * currentStep));
-            foreach (var rect in generatedLayout)
-            {
-                if (rect.Contains(Point.Truncate(tracingPos)))
-                    return (rect, tracingPos);
-            }
-            currentStep += 0.1;
+            notInRectangle = generatedLayout.All(rect => !rect.Contains(Point.Truncate(nextPos)));
+            currentStep += tracingStep;
+            nextPos = new PointF(
+                cloudCenter.X + direction.X * currentStep,
+                cloudCenter.Y + direction.Y * currentStep);
         }
-        
-        return (generatedLayout[0], cloudCenter);
+
+        return (currentStep, Point.Truncate(nextPos));
     }
 
-    private PointF GetNextPosition()
+    private PointF GetNextDirection()
     {
-        //var radius = 500d / (2 * Math.PI) * nextAngle;
-        var x = (float)(500d * Math.Cos(nextAngle) + cloudCenter.X);
-        var y = (float)(500d * Math.Sin(nextAngle) + cloudCenter.Y);
-
-        nextAngle *= -1;
-        if (nextAngle < 0)
-            nextAngle -= angleStep;
-        else
-            nextAngle += angleStep;
+        var x = (float)Math.Cos(nextAngle);
+        var y = (float)Math.Sin(nextAngle);
+        nextAngle += angleStep;
         return new PointF(x, y);
     }
 }
