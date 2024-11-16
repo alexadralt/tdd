@@ -12,7 +12,7 @@ namespace TagsCloudVisualization.Tests;
 
 [TestFixture]
 [TestOf(typeof(CircularCloudLayouterImpl))]
-public class CircularCloudLayouterImplTests
+public class CircularCloudLayouterTests
 {
 
     private static readonly string FailReportFolderPath = "./failed";
@@ -39,46 +39,50 @@ public class CircularCloudLayouterImplTests
         var context = TestContext.CurrentContext;
         if (context.Result.Outcome.Status == TestStatus.Failed)
         {
-            var args = context.Test.Arguments;
-            var center = new Point((int) args[0]!, (int) args[1]!);
             if (context.Test.MethodName == null)
             {
                 Console.WriteLine("Teardown error: test method name is null");
                 return;
             }
 
-            if (context.Test.MethodName.Contains(nameof(PutNextRectangle_ThrowsOnHeightOrWidth_BeingLessOrEqualToZero)))
+            var testType = DetermineTestType(context.Test.MethodName);
+            if (testType == TestType.NoTearDown)
                 return;
             
-            var isClosenessTest = context.Test.MethodName.Contains(nameof(RectanglesShouldBeCloseToEachOther));
-
-            var sizesArr = ((int, int)[])(isClosenessTest ? args[3] : args[2]);
+            var rectangles = _circularCloudLayouter.Layout.ToArray();
             
-            var rectangles = GenerateLayout(sizesArr, _circularCloudLayouter).ToArray();
             var savingPath = $"{FailReportFolderPath}/{context.Test.Name}.png";
-            
             Directory.CreateDirectory(FailReportFolderPath);
-            
+
+            var args = context.Test.Arguments;
+            var center = new Point((int) args[0]!, (int) args[1]!);
+
 #pragma warning disable CA1416
-            var bitmap = new Bitmap(1000, 1000);
-            var graphics = Graphics.FromImage(bitmap);
-            graphics.Clear(Color.White);
-            graphics.DrawRectangles(new Pen(Color.Blue), rectangles);
             
-            var isCenterTest = context.Test.MethodName.Contains(nameof(RectanglesCommonBarycenterIsCloseToTheProvidedCenter));
-            if (isCenterTest)
-            {
-                graphics.DrawEllipse(
-                    new Pen(Color.Lime), center.X, center.Y,
-                    MaxDistanceFromBarycenter, MaxDistanceFromBarycenter);
-                var barycenter = ComputeBaryCenter(rectangles);
-                graphics.DrawEllipse(new Pen(Color.Red), barycenter.X, barycenter.Y, 1, 1);
-            }
-            
-            bitmap.Save(savingPath, ImageFormat.Png);
+            new Bitmap(1000, 1000)
+                .DrawFailedTestImage(
+                    rectangles.ToArray(),
+                    center,
+                    ComputeBaryCenter(rectangles),
+                    MaxDistanceFromBarycenter,
+                    testType)
+                .Save(savingPath, ImageFormat.Png);
+
 #pragma warning restore CA1416
+            
             Console.WriteLine($"Failure was reported to {Path.GetFullPath(savingPath)}");
         }
+    }
+
+    private static TestType DetermineTestType(string methodName)
+    {
+        if (methodName == nameof(PutNextRectangle_ThrowsOnHeightOrWidth_BeingLessOrEqualToZero))
+            return TestType.NoTearDown;
+        
+        if (methodName == nameof(RectanglesCommonBarycenterIsCloseToTheProvidedCenter))
+            return TestType.BarycenterTest;
+        
+        return TestType.OtherTest;
     }
 
     [Test]
@@ -115,7 +119,7 @@ public class CircularCloudLayouterImplTests
     {
         Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
+        var rectangles = GenerateTestLayout(sizes);
 
         Assert_RectanglesDoNotIntersect(rectangles);
     }
@@ -131,7 +135,7 @@ public class CircularCloudLayouterImplTests
     {
         Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
+        var rectangles = GenerateTestLayout(sizes);
         
         Assert_FirstRectangleIsPositionedAtProvidedCenter(rectangles, new Point(centerX, centerY));
     }
@@ -149,7 +153,7 @@ public class CircularCloudLayouterImplTests
     {
         Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
+        var rectangles = GenerateTestLayout(sizes);
         
         Assert_RectanglesArePositionedCloseToEachOther(rectangles, maxDistance);
     }
@@ -165,7 +169,7 @@ public class CircularCloudLayouterImplTests
     {
         Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
+        var rectangles = GenerateTestLayout(sizes);
         
         Assert_RectanglesBarycenterIsCloseToCenter(rectangles, new Point(centerX, centerY));
     }
@@ -175,13 +179,10 @@ public class CircularCloudLayouterImplTests
         _circularCloudLayouter.CloudCenter = new Point(centerX, centerY);
     }
 
-    private IEnumerable<Rectangle> GenerateLayout(
-        (int, int)[] sizes,
-        ICircularCloudLayouter circularCloudLayouterImpl)
+    private IEnumerable<Rectangle> GenerateTestLayout((int, int)[] sizes)
     {
-        return sizes
-            .Select(((int w, int h) s) =>
-                circularCloudLayouterImpl.PutNextRectangle(new Size(s.w, s.h)));
+        return _circularCloudLayouter.GenerateLayout(
+            sizes.Select(size => new Size(size.Item1, size.Item2)).ToArray());
     }
 
     private void Assert_RectanglesDoNotIntersect(IEnumerable<Rectangle> rectangles)
