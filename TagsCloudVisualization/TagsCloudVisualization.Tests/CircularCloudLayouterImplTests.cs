@@ -11,8 +11,8 @@ using NUnit.Framework.Interfaces;
 namespace TagsCloudVisualization.Tests;
 
 [TestFixture]
-[TestOf(typeof(CircularCloudLayouter))]
-public class CircularCloudLayouterTest
+[TestOf(typeof(CircularCloudLayouterImpl))]
+public class CircularCloudLayouterImplTest
 {
 
     private static readonly string failReportFolderPath = "./failed";
@@ -164,65 +164,32 @@ public class CircularCloudLayouterTest
         Assert_RectanglesBarycenterIsCloseToCenter(rectangles, new Point(centerX, centerY));
     }
     
-    private static CircularCloudLayouter Arrange(int centerX, int centerY)
+    private static CircularCloudLayouterImpl Arrange(int centerX, int centerY)
     {
-        return new CircularCloudLayouter(new Point(centerX, centerY));
-    }
-
-    private readonly struct RectanglePair(Rectangle rectangle1, Rectangle rectangle2)
-    {
-        public Rectangle Rectangle1 { get; } = rectangle1;
-        public Rectangle Rectangle2 { get; } = rectangle2;
-        public bool HasNoIntersections() => !Rectangle1.IntersectsWith(Rectangle2);
-
-        public bool DistanceIsNotGreaterThan(int expectedDistance)
-        {
-            var center1 = RectangleCenter(Rectangle1);
-            var center2 = RectangleCenter(Rectangle2);
-            var actualDistance = SquaredDistance(center1, center2);
-            return actualDistance <= expectedDistance;
-        }
-    }
-
-    private static Point RectangleCenter(Rectangle rectangle)
-    {
-        return new Point((rectangle.X + rectangle.Right) / 2, (rectangle.Y + rectangle.Bottom) / 2);
-    }
-
-    private static int SquaredDistance(Point p1, Point p2)
-    {
-        return (int)(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
+        return new CircularCloudLayouterImpl(new Point(centerX, centerY));
     }
 
     private IEnumerable<Rectangle> GenerateLayout(
         (int, int)[] sizes,
-        CircularCloudLayouter circularCloudLayouter)
+        CircularCloudLayouterImpl circularCloudLayouterImpl)
     {
         return sizes
             .Select(((int w, int h) s) =>
-                circularCloudLayouter.PutNextRectangle(new Size(s.w, s.h)));
-    }
-
-    private IEnumerable<RectanglePair> GetAllPossibleRectanglePairs(IEnumerable<Rectangle> rectangles)
-    {
-        var rectangleList = rectangles.ToList();
-        return rectangleList
-            .SelectMany((rect1, index) => rectangleList
-                .GetRange(index, rectangleList.Count - index)
-                .Select(rect2 => new RectanglePair(rect1, rect2)))
-            .Where(pair => pair.Rectangle1 != pair.Rectangle2);
+                circularCloudLayouterImpl.PutNextRectangle(new Size(s.w, s.h)));
     }
 
     private void Assert_RectanglesDoNotIntersect(IEnumerable<Rectangle> rectangles)
     {
-        GetAllPossibleRectanglePairs(rectangles)
+        rectangles.CheckForAllPairs(pair => !pair.Item1.IntersectsWith(pair.Item2))
             .Should()
-            .OnlyContain(pair => pair.HasNoIntersections());
+            .BeTrue();
     }
 
     private void Assert_FirstRectangleIsPositionedAtProvidedCenter(IEnumerable<Rectangle> rectangles, Point center)
     {
-        RectangleCenter(rectangles.First())
+        rectangles
+            .First()
+            .RectangleCenter()
             .Should()
             .BeEquivalentTo(center);
     }
@@ -231,9 +198,9 @@ public class CircularCloudLayouterTest
         IEnumerable<Rectangle> rectangles,
         int maxDistance)
     {
-        GetAllPossibleRectanglePairs(rectangles)
+        rectangles.CheckForAllPairs(pair => pair.Item1.DistanceToOtherIsNotGreaterThan(pair.Item2, maxDistance))
             .Should()
-            .OnlyContain(pair => pair.DistanceIsNotGreaterThan(maxDistance));
+            .BeTrue();
     }
 
     private Point ComputeBaryCenter(IEnumerable<Rectangle> rectangles)
@@ -241,7 +208,7 @@ public class CircularCloudLayouterTest
         var (totalX, totalY, count) = rectangles
             .Aggregate((0, 0, 0), ((int totalX, int totalY, int count) res, Rectangle rect) =>
             {
-                var rectCenter = RectangleCenter(rect);
+                var rectCenter = rect.RectangleCenter();
                 return (res.totalX + rectCenter.X, res.totalY + rectCenter.Y, ++res.count);
             });
         return new Point(totalX / count, totalY / count);
@@ -252,7 +219,7 @@ public class CircularCloudLayouterTest
         Point center)
     {
         var barycenter = ComputeBaryCenter(rectangles);
-        var deviationFromCenter = SquaredDistance(barycenter, center);
+        var deviationFromCenter = barycenter.SquaredDistanceTo(center);
         deviationFromCenter.Should().BeLessOrEqualTo(maxDistanceFromBarycenter * maxDistanceFromBarycenter);
     }
 
