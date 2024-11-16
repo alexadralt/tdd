@@ -86,6 +86,19 @@ public class CircularCloudLayouterTests
     }
 
     [Test]
+    [Description("Проверяем, что поле CloudCenter бросает исключение, " +
+                 "если процесс генерации облака уже начался")]
+    public void CloudCenter_ThrowsIfLayoutContainsGeneratedRectangles()
+    {
+        _circularCloudLayouter.PutNextRectangle(new Size(1, 1));
+
+        Action act = () => _circularCloudLayouter.CloudCenter = new Point(1, 1);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Can not change cloud center after generation start");
+    }
+
+    [Test]
     [Description("Проверяем, что метод PutNextRectangle бросает ArgumentException, " +
                  "если ему передан размер прямоугольника с высотой или шириной " +
                  "меньше либо равной нулю")]
