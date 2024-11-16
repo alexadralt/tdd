@@ -111,7 +111,7 @@ public class CircularCloudLayouterTests
 
     [Test]
     [Description("Проверяем, что прямоугольники не пересекаются друг с другом")]
-    [TestCaseSource(nameof(IntersectionTestSource))]
+    [TestCaseSource(typeof(TestCaseData), nameof(TestCaseData.IntersectionTestSource))]
     public void RectanglesShouldNotIntersectEachOther(
         int centerX,
         int centerY,
@@ -127,7 +127,7 @@ public class CircularCloudLayouterTests
     [Test]
     [Description("Проверяем, что центр прямоугольника, размер которого был передан первым " +
                  "совпадает с центром, переданным в аргумент конструктора CircularCloudLayouter")]
-    [TestCaseSource(nameof(FirstRectanglePositionTestSource))]
+    [TestCaseSource(typeof(TestCaseData), nameof(TestCaseData.FirstRectanglePositionTestSource))]
     public void FirstRectangleShouldBePositionedAtProvidedCenter(
         int centerX,
         int centerY,
@@ -144,7 +144,7 @@ public class CircularCloudLayouterTests
     [Description("Проверяем, что прямоугольники расположены наиболее плотно, " +
                  "то есть максимум из попарных расстояний между центрами " +
                  "прямоугольников не превышает maxDistance")]
-    [TestCaseSource(nameof(DensityTestSource))]
+    [TestCaseSource(typeof(TestCaseData), nameof(TestCaseData.DensityTestSource))]
     public void RectanglesShouldBeCloseToEachOther(
         int centerX,
         int centerY,
@@ -161,7 +161,7 @@ public class CircularCloudLayouterTests
     [Test]
     [Description("Проверяем, что общий центр масс всех прямоугольников находится " +
                  "рядом с центром, переданным в конструктор CircularCloudLayouter")]
-    [TestCaseSource(nameof(CenterTestSource))]
+    [TestCaseSource(typeof(TestCaseData), nameof(TestCaseData.CenterTestSource))]
     public void RectanglesCommonBarycenterIsCloseToTheProvidedCenter(
         int centerX,
         int centerY,
@@ -228,162 +228,5 @@ public class CircularCloudLayouterTests
         var barycenter = ComputeBaryCenter(rectangles);
         var deviationFromCenter = barycenter.SquaredDistanceTo(center);
         deviationFromCenter.Should().BeLessOrEqualTo(MaxDistanceFromBarycenter * MaxDistanceFromBarycenter);
-    }
-
-    private static object[][] IntersectionTestSource()
-    {
-        return
-        [
-            [
-                500, 500,
-                new[]
-                {
-                    (20, 10),
-                    (40, 20),
-                    (60, 30),
-                    (80, 40)
-                }
-            ],
-            [
-                500, 500,
-                new[]
-                {
-                    (10, 10),
-                    (10, 10),
-                    (20, 10),
-                    (20, 10)
-                }
-            ],
-            [
-                600, 600,
-                new[]
-                {
-                    (20, 10),
-                    (30, 15),
-                    (50, 10),
-                    (60, 30),
-                    (30, 10),
-                    (40, 20)
-                }
-            ]
-        ];
-    }
-
-    private static object[][] FirstRectanglePositionTestSource()
-    {
-        return
-        [
-            [
-                500, 500,
-                new[]
-                {
-                    (20, 30),
-                    (30, 45),
-                    (40, 60)
-                }
-            ],
-            [
-                510, 550,
-                new[]
-                {
-                    (10, 40),
-                    (10, 30),
-                    (10, 20)
-                }
-            ],
-            [
-                300, 800,
-                new[]
-                {
-                    (10, 30)
-                }
-            ]
-        ];
-    }
-
-    private static object[][] DensityTestSource()
-    {
-        return
-        [
-            [
-                500, 500, 3025,
-                new[]
-                {
-                    (20, 20),
-                    (30, 30),
-                    (40, 40)
-                }
-            ],
-            [
-                500, 500, 3025,
-                new[]
-                {
-                    (20, 20),
-                    (40, 40),
-                    (30, 30)
-                }
-            ],
-            [
-                600, 400, 4225,
-                new[]
-                {
-                    (40, 40),
-                    (30, 30),
-                    (20, 20),
-                    (10, 10)
-                }
-            ],
-            [
-                400, 550, 3025,
-                new[]
-                {
-                    (20, 20),
-                    (30, 30),
-                    (40, 40),
-                    (10, 10)
-                }
-            ]
-        ];
-    }
-
-    private static object[][] CenterTestSource()
-    {
-        return
-        [
-            [
-                500, 500,
-                new[]
-                {
-                    (10, 20),
-                    (10, 60),
-                    (10, 60),
-                    (10, 20)
-                }
-            ],
-            [
-                300, 500,
-                new[]
-                {
-                    (10, 40),
-                    (10, 50),
-                    (20, 30),
-                    (40, 30)
-                }
-            ],
-            [
-                520, 410,
-                new[]
-                {
-                    (10, 20),
-                    (20, 30),
-                    (30, 40),
-                    (40, 50),
-                    (50, 40),
-                    (40, 30),
-                    (30, 20),
-                    (20, 10)
-                }
-            ]
-        ];
     }
 }
