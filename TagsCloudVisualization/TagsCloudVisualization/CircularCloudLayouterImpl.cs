@@ -4,9 +4,9 @@ namespace TagsCloudVisualization;
 
 public class CircularCloudLayouterImpl : ICircularCloudLayouter
 {
-    private static readonly float TracingStep = 0.01f;
+    private static readonly float TracingStep = 0.001f;
     private static readonly float MaxTracingDistance = 1000f;
-    private static readonly int MaxCycleCount = 6;
+    private static readonly int MaxCycleCount = 7;
 
     public Point CloudCenter
     {
@@ -21,6 +21,8 @@ public class CircularCloudLayouterImpl : ICircularCloudLayouter
         }
     }
     
+    public IEnumerable<Rectangle> Layout => _generatedLayout.AsEnumerable();
+
     private Point _cloudCenter;
     private List<Rectangle> _generatedLayout = new();
     private double _nextAngle;
