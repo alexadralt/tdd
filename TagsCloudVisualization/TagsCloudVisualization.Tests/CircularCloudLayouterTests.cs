@@ -12,17 +12,25 @@ namespace TagsCloudVisualization.Tests;
 
 [TestFixture]
 [TestOf(typeof(CircularCloudLayouterImpl))]
-public class CircularCloudLayouterImplTest
+public class CircularCloudLayouterImplTests
 {
 
-    private static readonly string failReportFolderPath = "./failed";
-    private static readonly int maxDistanceFromBarycenter = 20;
+    private static readonly string FailReportFolderPath = "./failed";
+    private static readonly int MaxDistanceFromBarycenter = 20;
+    
+    private ICircularCloudLayouter _circularCloudLayouter;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _circularCloudLayouter = new CircularCloudLayouterImpl(Point.Empty);
+    }
 
     [OneTimeSetUp]
     public void EmptyFailReportFolder()
     {
-        if (Directory.Exists(failReportFolderPath))
-            Directory.Delete(failReportFolderPath, true);
+        if (Directory.Exists(FailReportFolderPath))
+            Directory.Delete(FailReportFolderPath, true);
     }
 
     [TearDown]
@@ -33,7 +41,6 @@ public class CircularCloudLayouterImplTest
         {
             var args = context.Test.Arguments;
             var center = new Point((int) args[0]!, (int) args[1]!);
-            var circularCloudLayouter = Arrange(center.X, center.Y);
             if (context.Test.MethodName == null)
             {
                 Console.WriteLine("Teardown error: test method name is null");
@@ -47,10 +54,10 @@ public class CircularCloudLayouterImplTest
 
             var sizesArr = ((int, int)[])(isClosenessTest ? args[3] : args[2]);
             
-            var rectangles = GenerateLayout(sizesArr, circularCloudLayouter).ToArray();
-            var savingPath = $"{failReportFolderPath}/{context.Test.Name}.png";
+            var rectangles = GenerateLayout(sizesArr, _circularCloudLayouter).ToArray();
+            var savingPath = $"{FailReportFolderPath}/{context.Test.Name}.png";
             
-            Directory.CreateDirectory(failReportFolderPath);
+            Directory.CreateDirectory(FailReportFolderPath);
             
 #pragma warning disable CA1416
             var bitmap = new Bitmap(1000, 1000);
@@ -63,7 +70,7 @@ public class CircularCloudLayouterImplTest
             {
                 graphics.DrawEllipse(
                     new Pen(Color.Lime), center.X, center.Y,
-                    maxDistanceFromBarycenter, maxDistanceFromBarycenter);
+                    MaxDistanceFromBarycenter, MaxDistanceFromBarycenter);
                 var barycenter = ComputeBaryCenter(rectangles);
                 graphics.DrawEllipse(new Pen(Color.Red), barycenter.X, barycenter.Y, 1, 1);
             }
@@ -90,13 +97,12 @@ public class CircularCloudLayouterImplTest
         int width,
         int height)
     {
-        var circularCloudLayouter = Arrange(centerX, centerY);
+        Arrange(centerX, centerY);
 
-        Action act = () => circularCloudLayouter.PutNextRectangle(new Size(width, height));
+        Action act = () => _circularCloudLayouter.PutNextRectangle(new Size(width, height));
 
         act.Should()
-            .Throw<ArgumentException>()
-            .WithMessage("rectangle width and height must be greater than 0");
+            .Throw<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -107,9 +113,9 @@ public class CircularCloudLayouterImplTest
         int centerY,
         (int, int)[] sizes)
     {
-        var circularCloudLayouter = Arrange(centerX, centerY);
+        Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, circularCloudLayouter);
+        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
 
         Assert_RectanglesDoNotIntersect(rectangles);
     }
@@ -123,9 +129,9 @@ public class CircularCloudLayouterImplTest
         int centerY,
         (int, int)[] sizes)
     {
-        var circularCloudLayouter = Arrange(centerX, centerY);
+        Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, circularCloudLayouter);
+        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
         
         Assert_FirstRectangleIsPositionedAtProvidedCenter(rectangles, new Point(centerX, centerY));
     }
@@ -141,9 +147,9 @@ public class CircularCloudLayouterImplTest
         int maxDistance,
         (int, int)[] sizes)
     {
-        var circularCloudLayouter = Arrange(centerX, centerY);
+        Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, circularCloudLayouter);
+        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
         
         Assert_RectanglesArePositionedCloseToEachOther(rectangles, maxDistance);
     }
@@ -157,21 +163,21 @@ public class CircularCloudLayouterImplTest
         int centerY,
         (int, int)[] sizes)
     {
-        var circularCloudLayouter = Arrange(centerX, centerY);
+        Arrange(centerX, centerY);
 
-        var rectangles = GenerateLayout(sizes, circularCloudLayouter);
+        var rectangles = GenerateLayout(sizes, _circularCloudLayouter);
         
         Assert_RectanglesBarycenterIsCloseToCenter(rectangles, new Point(centerX, centerY));
     }
     
-    private static CircularCloudLayouterImpl Arrange(int centerX, int centerY)
+    private void Arrange(int centerX, int centerY)
     {
-        return new CircularCloudLayouterImpl(new Point(centerX, centerY));
+        _circularCloudLayouter.CloudCenter = new Point(centerX, centerY);
     }
 
     private IEnumerable<Rectangle> GenerateLayout(
         (int, int)[] sizes,
-        CircularCloudLayouterImpl circularCloudLayouterImpl)
+        ICircularCloudLayouter circularCloudLayouterImpl)
     {
         return sizes
             .Select(((int w, int h) s) =>
@@ -220,7 +226,7 @@ public class CircularCloudLayouterImplTest
     {
         var barycenter = ComputeBaryCenter(rectangles);
         var deviationFromCenter = barycenter.SquaredDistanceTo(center);
-        deviationFromCenter.Should().BeLessOrEqualTo(maxDistanceFromBarycenter * maxDistanceFromBarycenter);
+        deviationFromCenter.Should().BeLessOrEqualTo(MaxDistanceFromBarycenter * MaxDistanceFromBarycenter);
     }
 
     private static object[][] IntersectionTestSource()
