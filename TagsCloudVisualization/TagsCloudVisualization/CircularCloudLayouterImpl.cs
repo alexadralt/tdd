@@ -2,15 +2,27 @@ using System.Drawing;
 
 namespace TagsCloudVisualization;
 
-public class CircularCloudLayouter
+public class CircularCloudLayouterImpl : ICircularCloudLayouter
 {
-    
     private static readonly float TracingStep = 0.01f;
     private static readonly float MaxTracingDistance = 1000f;
     private static readonly int MaxCycleCount = 6;
+
+    public Point CloudCenter
+    {
+        get => _cloudCenter;
+        set
+        {
+            if (_generatedLayout.Count > 0)
+            {
+                throw new InvalidOperationException("Can not change cloud center after generation start");
+            }
+            _cloudCenter = value;
+        }
+    }
     
+    private Point _cloudCenter;
     private List<Rectangle> _generatedLayout = new();
-    private readonly Point _cloudCenter;
     private double _nextAngle;
     private double _angleStep = Math.PI / 2;
     private int _currentCycle;
@@ -28,21 +40,21 @@ public class CircularCloudLayouter
         }
     }
     
-    public CircularCloudLayouter(Point center)
+    public CircularCloudLayouterImpl(Point center)
     {
-        _cloudCenter = center;
+        CloudCenter = center;
     }
 
     public Rectangle PutNextRectangle(Size rectangleSize)
     {
-        if (rectangleSize.Width <= 0 || rectangleSize.Height <= 0)
-            throw new ArgumentException("rectangle width and height must be greater than 0");
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rectangleSize.Width, "Width");
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rectangleSize.Height, "Height");
         
         if (_generatedLayout.Count == 0)
         {
             var rectangle = new Rectangle(
-                _cloudCenter.X - rectangleSize.Width / 2,
-                _cloudCenter.Y - rectangleSize.Height / 2,
+                CloudCenter.X - rectangleSize.Width / 2,
+                CloudCenter.Y - rectangleSize.Height / 2,
                 rectangleSize.Width,
                 rectangleSize.Height);
             _generatedLayout.Add(rectangle);
@@ -124,8 +136,8 @@ public class CircularCloudLayouter
     private (float, Point) FindNextAvailablePosByTracingLine(PointF direction, float startingStep = 0.0f)
     {
         var nextPos = new PointF(
-            _cloudCenter.X + direction.X * MaxTracingDistance * TracingStep,
-            _cloudCenter.Y + direction.Y * MaxTracingDistance * TracingStep);
+            CloudCenter.X + direction.X * MaxTracingDistance * TracingStep,
+            CloudCenter.Y + direction.Y * MaxTracingDistance * TracingStep);
         var currentStep = startingStep == 0.0f ? TracingStep : startingStep;
         var notInRectangle = false;
         while (!notInRectangle)
@@ -141,8 +153,8 @@ public class CircularCloudLayouter
             }
             currentStep += TracingStep;
             nextPos = new PointF(
-                _cloudCenter.X + direction.X * MaxTracingDistance * currentStep,
-                _cloudCenter.Y + direction.Y * MaxTracingDistance * currentStep);
+                CloudCenter.X + direction.X * MaxTracingDistance * currentStep,
+                CloudCenter.Y + direction.Y * MaxTracingDistance * currentStep);
         }
 
         return (currentStep, Point.Truncate(nextPos));
